@@ -13,6 +13,7 @@ FastAPI backend with MySQL: quiz, profile, and diagnostics APIs.
 2. **MySQL**
    - Create DB and tables: `make db-setup` or `.\build.ps1 db-setup`
    - Uses `.env` or env vars: `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`
+   - `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) for AI-generated quiz questions via Google Gemini
 
 3. **Run server**
    ```bash
@@ -73,8 +74,9 @@ Responses use this shape:
 
 **Query params**
 
-- `question_id` (optional) — Return this question by id.
-- `index` (optional) — When `question_id` is omitted, 0-based index into the question list (default `0`).
+- `question_id` (optional) — Return this question by id (from cache or stub list).
+- `mood` (optional) — When `question_id` is omitted, mood for an AI-generated question (e.g. `reflective`, `playful`); random if omitted.
+- `topic` (optional) — When `question_id` is omitted, general topic for the question (e.g. `honesty and lying`); random if omitted.
 
 **Example: send response (POST `/quiz/sendResponse`)**
 
@@ -89,15 +91,35 @@ Responses use this shape:
 
 For multi-select, `selected_ids` can be an array. For free text, e.g. `{ "text": "user answer" }`.
 
-**Example: submit quiz (POST `/quiz/submit`)**
+**Submit quiz (POST `/quiz/submit`)**
+
+Sends a **batch of quiz responses**. For each item, the server looks up the question by `questionId` (from cache or stub), saves the response, then passes all question/response pairs to the MLP to update the user’s **personality vector**. Questions must have been fetched first (e.g. via `GET /quiz/getQuestion`) so they exist in the cache.
+
+**Request body**
 
 ```json
 {
-  "personality_vector": [0.1, -0.2, 0.5, 0.0]
+  "responses": [
+    { "questionId": 294029492059020, "response_data": { "selected_ids": [1] } },
+    { "questionId": 294029492059021, "response_data": { "selected_ids": [0, 2] } }
+  ]
 }
 ```
 
-Stores the vector in the **characteristics** table (`personality_vector` trait).
+- **`responses`** — Array of `{ "questionId": number, "response_data": object }`.
+- **`response_data`** — Same as for `sendResponse`: e.g. `{ "selected_ids": [1] }` (single/multi-select), `{ "ranked_ids": [0, 1, 2] }` (ranking), or `{ "text": "user answer" }` (free text).
+
+**Response**
+
+```json
+{
+  "message": "Quiz submitted",
+  "user_id": "...",
+  "vector_length": 64
+}
+```
+
+The updated personality vector is stored in the **characteristics** table (`personality_vector` trait).
 
 ---
 

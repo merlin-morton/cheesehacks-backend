@@ -433,18 +433,10 @@ def cache_question(question_id: int, question_data: dict) -> None:
 
 def get_question_to_return(question_id: int) -> Optional[dict]:
     """
-    Get question by id: from cache if present, otherwise call MLP (interfaceMLP.get_question_from_mlp),
-    cache the result, and return. Returns None if not cached and MLP returns nothing.
+    Get question by id from cache. Returns None if not in cache.
+    Use interfaceMLP.generate_question(mood, topic) for generating new questions.
     """
-    cached = get_cached_question(question_id)
-    if cached is not None:
-        return cached
-    import interfaceMLP
-    from_mlp = interfaceMLP.get_question_from_mlp(question_id)
-    if from_mlp is not None:
-        cache_question(question_id, from_mlp)
-        return from_mlp
-    return None
+    return get_cached_question(question_id)
 
 
 def _row_to_user(row: dict) -> dict:

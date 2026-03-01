@@ -1,97 +1,33 @@
 from contextlib import asynccontextmanager
-from fastapi import APIRouter, FastAPI, Header, HTTPException, Depends, Query
+from typing import Any, Optional
+
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from typing import Optional, Any
 
 import db
 import interfaceMLP
+from schemas import (
+    AddFriendBody,
+    QuizQuestionResponse,
+    QuizResponseItem,
+    RegisterBody,
+    SendResponseBody,
+    SubmitQuizBody,
+    TraitUpdate,
+    UpdateCharacteristicsBody,
+    UpdatePrivacyBody,
+    UpdateSettingsBody,
+)
 
 # --- Dependencies ---
+
 
 def get_current_user_id(x_user_id: Optional[str] = Header(None, alias="X-User-Id")) -> str:
     """Get current user from X-User-Id header (set by auth middleware after Google login)."""
     if not x_user_id:
         raise HTTPException(status_code=401, detail="X-User-Id header required")
     return x_user_id
-
-
-# --- Quiz question JSON format (response from getQuestion) ---
-
-class QuestionAnswer(BaseModel):
-    id: int
-    text: str
-
-
-class QuestionContent(BaseModel):
-    number: int
-    text: str
-
-
-class QuizQuestion(BaseModel):
-    """Question payload returned by GET /quiz/getQuestion."""
-    id: int
-    question_type: int  # 0–6: e.g. 0=single select, 1=multi-select, etc.
-    question: QuestionContent
-    answers: list[QuestionAnswer]
-
-
-class QuizQuestionResponse(BaseModel):
-    """Full getQuestion response: question + optional prior_response."""
-    id: int
-    question_type: int
-    question: QuestionContent
-    answers: list[QuestionAnswer]
-    prior_response: Optional[dict[str, Any]] = None
-
-
-# --- Pydantic models ---
-
-class SendResponseBody(BaseModel):
-    question_id: int  # Matches QuizQuestion.id
-    response_data: dict[str, Any]  # e.g. {"selected_ids": [0, 2]} for multi-select
-
-
-class QuizResponseItem(BaseModel):
-    questionId: int
-    response_data: dict[str, Any]  # { selected_ids: [int] } | { ranked_ids: [int] } | { text: str }
-
-
-class SubmitQuizBody(BaseModel):
-    """Batch of quiz responses: format each, send to MLP, update personality vector."""
-    responses: list[QuizResponseItem]
-
-
-class UpdateSettingsBody(BaseModel):
-    user_settings: dict[str, Any]
-
-
-class UpdatePrivacyBody(BaseModel):
-    is_hidden: Optional[bool] = None
-    privacy_settings: Optional[dict[str, Any]] = None
-
-
-class AddFriendBody(BaseModel):
-    friend_id: str
-
-
-class RegisterBody(BaseModel):
-    """Called after Google login to create/update user."""
-    provider_sub: str
-    provider: str = "google"
-    email: str
-
-
-class TraitUpdate(BaseModel):
-    """One characteristic to set. value: string for text traits, list[float] only for personality_vector."""
-    trait_key: str
-    value: Any  # str for most traits; list[float] for personality_vector
-    is_public: bool = False
-
-
-class UpdateCharacteristicsBody(BaseModel):
-    traits: list[TraitUpdate]
 
 
 # --- Stub quiz questions (replace with DB later) ---
@@ -131,19 +67,20 @@ async def quiz_root():
 
 @quiz_router.get("/getQuestion", response_model=QuizQuestionResponse)
 async def get_question(
-    question_id: Optional[int] = Query(None, description="Specific question id, or omit for next question"),
-    index: Optional[int] = Query(None, description="0-based index into question list (used when question_id omitted)"),
+    question_id: Optional[int] = Query(None, description="Specific question id, or omit to generate a new question"),
+    mood: Optional[str] = Query(None, description="Mood for generated question (e.g. reflective, playful); random if omitted"),
+    topic: Optional[str] = Query(None, description="General topic for generated question (e.g. honesty, fairness); random if omitted"),
     user_id: str = Depends(get_current_user_id),
 ):
     """Get a quiz question in the standard JSON format. Includes prior_response if user already answered this question."""
-    # 1) Resolve question content: cache/MLP by id, or stub list by index
+    # 1) Resolve question content: by id from cache, or generate new question via Gemini
     if question_id is not None:
         q = db.get_question_to_return(question_id)
         if q is None:
             q = next((s for s in STUB_QUESTIONS if s["id"] == question_id), None)
     else:
-        idx = index if index is not None else 0
-        q = STUB_QUESTIONS[idx % len(STUB_QUESTIONS)] if STUB_QUESTIONS else None
+        q = interfaceMLP.generate_question(mood=mood, topic=topic)
+        db.cache_question(q["id"], q)
     if not q:
         raise HTTPException(status_code=404, detail="Question not found")
     # 2) Attach this user's prior answer for this question (if any)

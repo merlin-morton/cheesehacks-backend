@@ -5,6 +5,9 @@ Interface to a separate MLP (personality model). Stubs for now.
 - Call MLP with personality vector to get inferred characteristics (key-value); persist to characteristics table.
 """
 import json
+import os
+import random
+import re
 import struct
 from typing import Any
 
@@ -127,22 +130,128 @@ def _call_mlp(personality_vector: list[float], response_strings: list[str]) -> l
         )
 
         # run the MLP model
-        personality_vector = torch.tensor(personality_vector, dtype=torch.float32).unsqueeze(0)
+        personality_vector = inference_model(emb)
 
     return list(personality_vector)
 
 
-def get_question_from_mlp(question_id: int) -> dict[str, Any] | None:
+# Predefined lists for mood and topic when not provided (~20 each)
+MOODS = [
+    "reflective", "playful", "serious", "curious", "contemplative",
+    "lighthearted", "philosophical", "challenging", "thoughtful", "witty",
+    "provocative", "empathetic", "skeptical", "optimistic", "pragmatic",
+    "idealistic", "neutral", "introspective", "bold", "gentle",
+]
+
+TOPICS = [
+    "honesty and lying", "fairness and justice", "family and loyalty",
+    "technology and privacy", "environment and future generations",
+    "wealth and inequality", "freedom vs security", "punishment and mercy",
+    "truth and consequences", "individual vs collective good",
+    "consent and boundaries", "work and life balance", "sacrifice and duty",
+    "forgiveness and revenge", "tradition vs progress", "rights and responsibilities",
+    "life and death choices", "loyalty and betrayal", "creativity and ownership",
+    "authority and disobedience",
+]
+
+
+def generate_question(mood: str | None = None, topic: str | None = None) -> dict[str, Any]:
     """
-    Stub: call the MLP to get a new question by id. Returns the question in
-    standard format:
-    { "id": int, "question_type": int, "question": { "number": int,
-    "text": str }, "answers": [ { "id": int, "text": str } ] }
-    or None if the MLP has no question for this id.
-    Replace with real HTTP/gRPC call to your ML question service.
+    Generate an interesting and engaging moral/ethical question using Google Gemini.
+    mood: optional mood (e.g. reflective, playful). If blank, chosen randomly from MOODS.
+    topic: optional general topic (e.g. honesty, fairness). If blank, chosen randomly from TOPICS.
+    Returns question in standard format:
+    { "id": int, "question_type": int, "question": { "number": int, "text": str }, "answers": [ { "id": int, "text": str } ] }
     """
-    # Stub: return None so caller can fall back to cache/404; replace with actual MLP call
-    return None
+    m = (mood or "").strip() or random.choice(MOODS)
+    t = (topic or "").strip() or random.choice(TOPICS)
+
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        # Try loading .env from repo root (same dir as this file)
+        try:
+            from pathlib import Path
+            from dotenv import load_dotenv
+            _env_path = Path(__file__).resolve().parent / ".env"
+            load_dotenv(_env_path)
+            api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        except Exception:
+            pass
+    if not api_key:
+        import sys
+        print("No GEMINI_API_KEY or GOOGLE_API_KEY in env or .env (using fallback question).", file=sys.stderr)
+        question_id = random.randint(1, 2**31 - 1)
+        return {
+            "id": question_id,
+            "question_type": 5,
+            "question": {"number": 1, "text": f"In a {m} mood, consider: What matters more—{t.replace(' and ', ' or ')}?"},
+            "answers": [{"id": 0, "text": "Yes"}, {"id": 1, "text": "No"}],
+        }
+
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=api_key)
+    prompt = f"""Generate exactly one moral or ethical question that is interesting and engaging.
+Mood: {m}
+General topic: {t}
+
+Reply with only a single JSON object, no other text, in this exact format:
+{{"question": "<the question text>", "answers": ["<option A>", "<option B>", ...]}}
+Provide 2 to 5 short answer options. The question should make people think about values and trade-offs."""
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(max_output_tokens=512),
+        )
+        text = response.text if response.text else ""
+    except Exception as e:
+        import sys
+        print(f"Gemini API error (using fallback): {e}", file=sys.stderr)
+        question_id = random.randint(1, 2**31 - 1)
+        return {
+            "id": question_id,
+            "question_type": 5,
+            "question": {"number": 1, "text": f"In a {m} mood, consider: What matters more—{t.replace(' and ', ' or ')}?"},
+            "answers": [{"id": 0, "text": "Yes"}, {"id": 1, "text": "No"}],
+        }
+
+    # Parse JSON from response (allow markdown code block wrapper)
+    json_match = re.search(r"\{[\s\S]*\}", text)
+    if not json_match:
+        question_id = random.randint(1, 2**31 - 1)
+        return {
+            "id": question_id,
+            "question_type": 5,
+            "question": {"number": 1, "text": f"In a {m} mood, consider: What matters more—{t.replace(' and ', ' or ')}?"},
+            "answers": [{"id": 0, "text": "Yes"}, {"id": 1, "text": "No"}],
+        }
+    try:
+        data = json.loads(json_match.group())
+        q_text = data.get("question") or data.get("question_text") or "What do you think?"
+        raw_answers = data.get("answers") or data.get("options") or ["Yes", "No"]
+        if not isinstance(raw_answers, list):
+            raw_answers = ["Yes", "No"]
+        answers = [{"id": i, "text": str(a)[:200]} for i, a in enumerate(raw_answers[:10])]
+    except (json.JSONDecodeError, TypeError):
+        question_id = random.randint(1, 2**31 - 1)
+        return {
+            "id": question_id,
+            "question_type": 5,
+            "question": {"number": 1, "text": f"In a {m} mood, consider: What matters more—{t.replace(' and ', ' or ')}?"},
+            "answers": [{"id": 0, "text": "Yes"}, {"id": 1, "text": "No"}],
+        }
+
+    question_id = random.randint(1, 2**31 - 1)
+    question_type = 0 if len(answers) > 2 else 5  # single select or yes/no
+    return {
+        "id": question_id,
+        "question_type": question_type,
+        "question": {"number": 1, "text": q_text[:500]},
+        "answers": answers,
+    }
 
 
 def _call_mlp_characteristics_callback(personality_vector: list[float]) -> dict[str, Any]:
