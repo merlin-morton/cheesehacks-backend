@@ -76,7 +76,7 @@ def train(
 
     model = CoolProjectionHead(in_features=in_features, out_classes=out_classes).to(device_obj)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
-    # cross entropy bc we are boringfr54
+    # cross entropy bc we are boringfr54down
     criterion = nn.CrossEntropyLoss()
 
     # training loop

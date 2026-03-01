@@ -18,7 +18,12 @@ class BigFive(Dataset):
         texts = [str(text) for text in self.data['description']]
         labels = self.data['trait']
 
-        self.embeddings = encoder.encode(texts, convert_to_tensor=True)
+        self.embeddings = encoder.encode(
+            texts,
+            convert_to_tensor=True,
+            show_progress_bar=True,
+            batch_size=256
+        )
         self.labels = torch.tensor(labels, dtype=torch.long)
 
         self.unique_labels = sorted(set(labels))
