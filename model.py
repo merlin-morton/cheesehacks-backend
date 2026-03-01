@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class SharedEncoderBinaryHeads(nn.Module):
-    def __init__(self, input_dim: int, latent_dim: int, tasks: list[str], dropout: float = 0.1):
+    def __init__(self, input_dim: int, latent_dim: int, dropout: float = 0.1,tasks = ["commonsense", "deontology", "justice", "utilitarianism", "virtue"]):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, latent_dim),

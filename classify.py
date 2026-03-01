@@ -1,4 +1,3 @@
-# classify.py
 import argparse
 import json
 from typing import List, Dict, Any, Optional
@@ -43,21 +42,11 @@ def classify_batch(
     normalize_embeddings: bool = True,
     return_probs: bool = True,
 ) -> Dict[str, Any]:
-    """
-    Returns:
-      {
-        "tasks": [t1..tK],
-        "sentences": [...],
-        "logits": [[...K] * B],
-        "probs":  [[...K] * B],   # if return_probs
-      }
-    """
     if tasks is None:
         tasks = list(model.heads.keys())
     if device is None:
         device = next(model.parameters()).device
 
-    # sentence-transformers returns numpy by default if convert_to_tensor=False
     emb = embedder.encode(
         sentences,
         batch_size=batch_size,
@@ -67,7 +56,6 @@ def classify_batch(
     )  # [B, D] on embedder device
     emb = emb.to(device)
 
-    # Run shared encoder ONCE, then all heads
     z = model.encoder(emb)  # [B, H]
 
     logits_per_task = []
@@ -101,7 +89,6 @@ def read_sentences_from_args(sentences: List[str], file_path: Optional[str]) -> 
                 if line:
                     sents.append(line)
 
-    # also allow: if user passes a single json list in --sentences
     if len(sents) == 1:
         one = sents[0].strip()
         if (one.startswith("[") and one.endswith("]")) or (one.startswith('"') and one.endswith('"')):

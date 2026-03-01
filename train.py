@@ -1,4 +1,3 @@
-# train_model.py
 import os
 import math
 import argparse
@@ -13,15 +12,7 @@ from datasets import load_from_disk
 from model import SharedEncoderBinaryHeads
 
 
-# ---- Dataset wrapper ----
 class EthicsEmbDataset(Dataset):
-    """
-    Expects a HuggingFace split with at least:
-      - "embedding": list[float] length D
-      - "label": binary (0/1, False/True, or "0"/"1")
-    Can also contain:
-      - "scenario": str (ignored by default)
-    """
     def __init__(self, hf_split, require_cols: Optional[List[str]] = None):
         self.ds = hf_split
         self.require_cols = require_cols or ["embedding", "label"]
@@ -65,10 +56,7 @@ class EthicsEmbDataset(Dataset):
 
 
 def get_split_for_eval(ds_dict):
-    """
-    Pick the best eval split available.
-    Prefer 'test', else 'validation', else None.
-    """
+    
     if "test" in ds_dict:
         return "test"
     if "validation" in ds_dict:
@@ -76,7 +64,6 @@ def get_split_for_eval(ds_dict):
     return None
 
 
-# ---- Train / Eval helpers ----
 @torch.no_grad()
 def eval_task(model: nn.Module, loader: DataLoader, task: str, device: torch.device) -> Dict[str, float]:
     model.eval()
@@ -113,12 +100,7 @@ def train_epoch_grouped_by_task(
     device: torch.device,
     grad_clip: float = 1.0,
 ) -> Dict[str, Dict[str, float]]:
-    """
-    One epoch where we train in *task-batches*:
-      for task in tasks:
-        for batch in task_loader:
-          update(model on that task)
-    """
+
     model.train()
     loss_fn = nn.BCEWithLogitsLoss()
     stats: Dict[str, Dict[str, float]] = {}
@@ -206,7 +188,6 @@ def main():
                 f"{path} has no 'test' or 'validation' split. Found splits: {list(ds.keys())}"
             )
 
-        # ----- schema sanity check -----
         train_cols = ds["train"].column_names
         eval_cols = ds[eval_split].column_names
         for split_name, cols in [("train", train_cols), (eval_split, eval_cols)]:
@@ -216,7 +197,6 @@ def main():
                     f"Columns: {cols}"
                 )
 
-        # Determine embedding dimension from first element
         if input_dim is None:
             first = ds["train"][0]["embedding"]
             input_dim = len(first)
