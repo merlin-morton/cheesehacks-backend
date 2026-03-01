@@ -2,5 +2,8 @@ fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 mysql-connector-python>=8.0.0
 pydantic>=2.0.0
+huggingface_hub>=0.20.0
+sentence-transformers>=2.2.0
+google-genai>=1.0.0
+python-dotenv>=1.0.0
 pandas
-huggingface_hub
