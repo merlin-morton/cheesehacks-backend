@@ -130,9 +130,9 @@ def _call_mlp(personality_vector: list[float], response_strings: list[str]) -> l
         )
 
         # run the MLP model
-        personality_vector = inference_model.forward_embedding(emb)
+        personality_vector = inference_model.embedding_forward(emb)
 
-    return list(personality_vector)
+    return list[float](personality_vector)
 
 
 # Predefined lists for mood and topic when not provided (~20 each)
