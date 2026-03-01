@@ -37,10 +37,13 @@ CREATE TABLE IF NOT EXISTS characteristics (
     value_text TEXT NULL,
     value_blob BLOB NULL,
     is_public BOOLEAN NOT NULL DEFAULT FALSE,
+    manually_overridden BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Set TRUE when set via POST /profile/updateCharacteristics; MLP callback will not overwrite',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, trait_key),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+-- If upgrading: ALTER TABLE characteristics ADD COLUMN manually_overridden BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Friends: many-to-many relationship
 CREATE TABLE IF NOT EXISTS friends (

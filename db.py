@@ -212,13 +212,14 @@ def get_characteristics(user_id: str, public_only: bool = False) -> dict:
 
 def get_characteristics_with_visibility(user_id: str) -> list[dict]:
     """
-    Get all characteristics with is_public flag for API. Each item: { trait_key, value, is_public }.
+    Get all characteristics with is_public and manually_overridden for API.
+    Each item: { trait_key, value, is_public, manually_overridden }.
     personality_vector value is returned as bytes; caller can convert to list[float] for JSON.
     """
     with get_connection() as conn:
         cur = conn.cursor(dictionary=True)
         cur.execute(
-            "SELECT trait_key, value_text, value_blob, is_public FROM characteristics WHERE user_id = %s",
+            "SELECT trait_key, value_text, value_blob, is_public, manually_overridden FROM characteristics WHERE user_id = %s",
             (user_id,),
         )
         rows = cur.fetchall()
@@ -231,7 +232,12 @@ def get_characteristics_with_visibility(user_id: str) -> list[dict]:
             val = r["value_text"]
         else:
             continue
-        out.append({"trait_key": r["trait_key"], "value": val, "is_public": bool(r["is_public"])})
+        out.append({
+            "trait_key": r["trait_key"],
+            "value": val,
+            "is_public": bool(r["is_public"]),
+            "manually_overridden": bool(r.get("manually_overridden", False)),
+        })
     return out
 
 
@@ -242,33 +248,48 @@ def set_characteristic(
     is_public: bool = False,
     *,
     value_is_blob: bool = False,
+    manually_overridden: bool = False,
 ) -> bool:
     """
     Set one characteristic. value_is_blob=True for personality_vector (bytes); else value stored as text.
+    manually_overridden=True when set via POST /profile/updateCharacteristics; MLP callback will not overwrite those.
     """
     with get_connection() as conn:
         cur = conn.cursor()
         if value_is_blob:
             cur.execute(
                 """
-                INSERT INTO characteristics (user_id, trait_key, value_blob, is_public)
-                VALUES (%s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE value_blob = VALUES(value_blob), value_text = NULL, is_public = VALUES(is_public)
+                INSERT INTO characteristics (user_id, trait_key, value_blob, is_public, manually_overridden)
+                VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE value_blob = VALUES(value_blob), value_text = NULL, is_public = VALUES(is_public), manually_overridden = VALUES(manually_overridden)
                 """,
-                (user_id, trait_key, value, is_public),
+                (user_id, trait_key, value, is_public, manually_overridden),
             )
         else:
             text_val = value if isinstance(value, str) else json.dumps(value) if value is not None else None
             cur.execute(
                 """
-                INSERT INTO characteristics (user_id, trait_key, value_text, is_public)
-                VALUES (%s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE value_text = VALUES(value_text), value_blob = NULL, is_public = VALUES(is_public)
+                INSERT INTO characteristics (user_id, trait_key, value_text, is_public, manually_overridden)
+                VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE value_text = VALUES(value_text), value_blob = NULL, is_public = VALUES(is_public), manually_overridden = VALUES(manually_overridden)
                 """,
-                (user_id, trait_key, text_val, is_public),
+                (user_id, trait_key, text_val, is_public, manually_overridden),
             )
         cur.close()
     return True
+
+
+def get_manually_overridden_trait_keys(user_id: str) -> set:
+    """Return set of trait_keys that were manually set via POST /profile/updateCharacteristics; MLP should not overwrite these."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT trait_key FROM characteristics WHERE user_id = %s AND manually_overridden = TRUE",
+            (user_id,),
+        )
+        rows = cur.fetchall()
+        cur.close()
+    return {r[0] for r in rows}
 
 
 def set_characteristic_visibility(user_id: str, trait_key: str, is_public: bool) -> bool:

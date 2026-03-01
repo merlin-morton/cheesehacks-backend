@@ -274,7 +274,12 @@ async def get_characteristics(user_id: str = Depends(get_current_user_id)):
             val = list(struct.unpack(f"{n}d", val[: n * 8]))
         elif isinstance(val, bytes):
             val = val.decode("utf-8", errors="replace")
-        out.append({"trait_key": r["trait_key"], "value": val, "is_public": r["is_public"]})
+        out.append({
+            "trait_key": r["trait_key"],
+            "value": val,
+            "is_public": r["is_public"],
+            "manually_overridden": r.get("manually_overridden", False),
+        })
     return {"characteristics": out}
 
 
@@ -283,16 +288,16 @@ async def update_characteristics(
     body: UpdateCharacteristicsBody,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Set or update characteristics. personality_vector: pass value as list[float]; all others as string. Each trait has is_public."""
+    """Set or update characteristics. Marks traits as manually_overridden so MLP callback will not overwrite them."""
     import struct
     if not db.get_user(user_id):
         raise HTTPException(status_code=404, detail="User not found")
     for t in body.traits:
         if t.trait_key == "personality_vector" and isinstance(t.value, list):
             vector_bytes = struct.pack(f"{len(t.value)}d", *t.value)
-            db.set_characteristic(user_id, t.trait_key, vector_bytes, t.is_public, value_is_blob=True)
+            db.set_characteristic(user_id, t.trait_key, vector_bytes, t.is_public, value_is_blob=True, manually_overridden=True)
         else:
-            db.set_characteristic(user_id, t.trait_key, t.value, t.is_public, value_is_blob=False)
+            db.set_characteristic(user_id, t.trait_key, t.value, t.is_public, value_is_blob=False, manually_overridden=True)
     return {"message": "Characteristics updated", "count": len(body.traits)}
 
 

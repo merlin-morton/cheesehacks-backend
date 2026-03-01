@@ -144,18 +144,22 @@ def update_characteristics_from_mlp(
     """
     Call the MLP characteristics callback with the personality vector; MLP returns
     key-value characteristics. For each (key, value), update the characteristics
-    table. Skips the key 'personality_vector' so the vector is not overwritten.
+    table only if that trait was not manually overridden via POST /profile/updateCharacteristics.
+    Skips the key 'personality_vector' so the vector is not overwritten.
     Returns the dict of traits that were applied.
     """
     characteristics = _call_mlp_characteristics_callback(personality_vector)
+    overridden = db.get_manually_overridden_trait_keys(user_id)
     applied = {}
     for trait_key, value in characteristics.items():
         if trait_key == "personality_vector":
             continue
         if value is None:
             continue
+        if trait_key in overridden:
+            continue
         text_val = value if isinstance(value, str) else json.dumps(value)
-        db.set_characteristic(user_id, trait_key, text_val, is_public, value_is_blob=False)
+        db.set_characteristic(user_id, trait_key, text_val, is_public, value_is_blob=False, manually_overridden=False)
         applied[trait_key] = value
     return applied
 
