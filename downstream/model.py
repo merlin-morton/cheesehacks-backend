@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from model import SharedEncoderBinaryHeads
+
 
 class CoolProjectionHead(nn.Module):
     """
@@ -12,8 +14,12 @@ class CoolProjectionHead(nn.Module):
         out_classes: number of target classes
     """
 
-    def __init__(self, in_features: int = 384, out_classes: int = 16):
+    def __init__(self,
+                 in_features: int = 384,
+                 out_classes: int = 16,
+                 checkpoint_path: str = None):
         super().__init__()
+        encoder = SharedEncoderBinaryHeads(input_dim=in_features, latent_dim=in_features, tasks=['dummy'])
         self.mlp = nn.Sequential(
             nn.Linear(in_features, out_classes * 2),
             nn.GELU(),
