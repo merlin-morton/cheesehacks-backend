@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI, Header, HTTPException, Depends, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Any
@@ -128,17 +129,18 @@ async def get_question(
     user_id: str = Depends(get_current_user_id),
 ):
     """Get a quiz question in the standard JSON format. Includes prior_response if user already answered this question."""
-    prior = None
+    # 1) Resolve question content: cache/MLP by id, or stub list by index
     if question_id is not None:
-        prior = db.get_quiz_response(user_id, str(question_id))
-    # Resolve which question to return
-    if question_id is not None:
-        q = next((q for q in STUB_QUESTIONS if q["id"] == question_id), None)
+        q = db.get_question_to_return(question_id)
+        if q is None:
+            q = next((s for s in STUB_QUESTIONS if s["id"] == question_id), None)
     else:
         idx = index if index is not None else 0
         q = STUB_QUESTIONS[idx % len(STUB_QUESTIONS)] if STUB_QUESTIONS else None
     if not q:
         raise HTTPException(status_code=404, detail="Question not found")
+    # 2) Attach this user's prior answer for this question (if any)
+    prior = db.get_quiz_response(user_id, str(q["id"]))
     return QuizQuestionResponse(prior_response=prior, **q)
 
 
@@ -314,6 +316,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Align", description="Quiz, profile, and diagnostics API.", lifespan=lifespan)
+
+# Allow browser requests from any origin (fixes CORS when calling from other sites/devices)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(quiz_router)
 app.include_router(diagnostics_router)
 app.include_router(profile_router)

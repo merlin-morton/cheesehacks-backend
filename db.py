@@ -399,6 +399,54 @@ def update_personality_vector(user_id: str, vector_bytes: bytes, is_public: bool
     return set_characteristic(user_id, "personality_vector", vector_bytes, is_public, value_is_blob=True)
 
 
+# --- Questions cache (by question_id); miss → call MLP then cache ---
+
+def get_cached_question(question_id: int) -> Optional[dict]:
+    """Return cached question by question_id, or None if not in DB."""
+    with get_connection() as conn:
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT question_data FROM questions WHERE question_id = %s", (question_id,))
+        row = cur.fetchone()
+        cur.close()
+    if not row:
+        return None
+    data = row["question_data"]
+    if isinstance(data, str):
+        return json.loads(data)
+    return data
+
+
+def cache_question(question_id: int, question_data: dict) -> None:
+    """Insert or replace question in cache (questions table)."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO questions (question_id, question_data)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE question_data = VALUES(question_data)
+            """,
+            (question_id, json.dumps(question_data)),
+        )
+        cur.close()
+
+
+def get_question_to_return(question_id: int) -> Optional[dict]:
+    """
+    Get question by id: from cache if present, otherwise call MLP (interfaceMLP.get_question_from_mlp),
+    cache the result, and return. Returns None if not cached and MLP returns nothing.
+    """
+    cached = get_cached_question(question_id)
+    if cached is not None:
+        return cached
+    import interfaceMLP
+    from_mlp = interfaceMLP.get_question_from_mlp(question_id)
+    if from_mlp is not None:
+        cache_question(question_id, from_mlp)
+        return from_mlp
+    return None
+
+
 def _row_to_user(row: dict) -> dict:
     """Convert DB row to API-friendly dict."""
     out = dict(row)

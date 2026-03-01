@@ -60,6 +60,13 @@ CREATE TABLE IF NOT EXISTS friends (
     CHECK (user_id != friend_id)
 );
 
+-- Questions cache: MLP-generated or preloaded questions by question_id (avoids repeated MLP calls)
+CREATE TABLE IF NOT EXISTS questions (
+    question_id BIGINT NOT NULL PRIMARY KEY,
+    question_data JSON NOT NULL COMMENT 'Full question: id, question_type, question: {number, text}, answers: [{id, text}]',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Quiz responses: store per-question responses before final submit (for getQuestion context)
 CREATE TABLE IF NOT EXISTS quiz_responses (
     id INT AUTO_INCREMENT PRIMARY KEY,

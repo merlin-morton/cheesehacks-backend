@@ -95,6 +95,16 @@ def _call_mlp(personality_vector: list[float], response_strings: list[str]) -> l
     return list(personality_vector)
 
 
+def get_question_from_mlp(question_id: int) -> dict[str, Any] | None:
+    """
+    Stub: call the MLP to get a new question by id. Returns the question in standard format:
+    { "id": int, "question_type": int, "question": { "number": int, "text": str }, "answers": [ { "id": int, "text": str } ] }
+    or None if the MLP has no question for this id. Replace with real HTTP/gRPC call to your ML question service.
+    """
+    # Stub: return None so caller can fall back to cache/404; replace with actual MLP call
+    return None
+
+
 def _call_mlp_characteristics_callback(personality_vector: list[float]) -> dict[str, Any]:
     """
     Stub: different callback — send personality vector to the MLP and get back
