@@ -17,3 +17,6 @@ class SharedEncoderBinaryHeads(nn.Module):
     def forward(self, emb: torch.Tensor, task: str) -> torch.Tensor:
         z = self.encoder(emb)          # [B,H]
         return self.heads[task](z)     # [B,1] logits
+
+    def embedding_forward(self, emb: torch.Tensor) -> torch.Tensor:
+        return self.encoder(emb)
