@@ -5,8 +5,7 @@ from sentence_transformers import SentenceTransformer
 
 
 class MoralFoundation(Dataset):
-    """
-    huggingface dataset wrapper for moral foundations classification.
+    """huggingface dataset wrapper for mbti text classification.
     """
 
     def __init__(
@@ -21,14 +20,7 @@ class MoralFoundation(Dataset):
             range(int(len(full_data) * 0.1)))
 
         texts = [str(text) for text in self.data['text']]
-
-        # map string labels to integers
-        raw_annotations = [str(a) for a in self.data['annotation']]
-        self.unique_labels = sorted(list(set(raw_annotations)))
-        self.num_classes = len(self.unique_labels)
-
-        label_to_idx = {label: i for i, label in enumerate(self.unique_labels)}
-        indices = [label_to_idx[a] for a in raw_annotations]
+        labels = self.data['annotation']
 
         self.embeddings = encoder.encode(
             texts,
@@ -36,6 +28,29 @@ class MoralFoundation(Dataset):
             show_progress_bar=True,
             batch_size=256
         )
+        # map string labels to integers
+        raw_annotations = [str(a) if a is not None else "Non-Moral" for a in
+                           self.data['annotation']]
+
+        all_labels = []
+        for a in raw_annotations:
+            # split by comma if multi-label, strip whitespace
+            parts = [p.strip() for p in a.split(',')]
+            all_labels.extend(parts)
+
+        self.unique_labels = sorted(list(set(all_labels)))
+        self.num_classes = len(self.unique_labels)
+        self.label_to_idx = {label: i for i, label in
+                             enumerate(self.unique_labels)}
+        self.idx_to_label = {i: label for label, i in
+                             self.label_to_idx.items()}
+
+        print(f"\n# USC-MOLA-Lab/MFRC MAPPING:\n{self.idx_to_label}")
+
+        indices = [self.label_to_idx[
+                       str(a).split(',')[0].strip()] if a is not None else
+                   self.label_to_idx["Non-Moral"] for a in
+                   self.data['annotation']]
         self.labels = torch.tensor(indices, dtype=torch.long)
 
     def __len__(self) -> int:

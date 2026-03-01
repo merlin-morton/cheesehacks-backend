@@ -55,7 +55,7 @@ def train(
     elif dataset_name == "moralfoundation":
         dataset = MoralFoundation(encoder)
         out_classes = dataset.num_classes
-        test_dataset = MoralFoundation(encoder, split="test")
+        test_dataset = MoralFoundation(encoder, split="train")
     elif dataset_name == "politicalleaning":
         dataset = PoliticalLeaning(encoder)
         out_classes = dataset.num_classes
