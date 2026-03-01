@@ -1,4 +1,4 @@
-# Aligned Backend
+# Align Backend
 
 FastAPI backend with MySQL: quiz, profile, and diagnostics APIs.
 

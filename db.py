@@ -1,6 +1,9 @@
 """
-MySQL database connection and query helpers for Aligned backend.
-Uses environment variables: MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE
+MySQL database connection and query helpers for Align backend.
+Uses environment variables: MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, MYSQL_PORT
+
+Cloud SQL (Cloud Run): set MYSQL_HOST=/cloudsql/PROJECT:REGION:INSTANCE to use Unix socket.
+Local: MYSQL_HOST=localhost (default), optional MYSQL_PORT.
 """
 import os
 import json
@@ -16,15 +19,20 @@ except ImportError:
 
 
 def get_connection_config() -> dict:
+    host = os.getenv("MYSQL_HOST", "localhost")
     cfg = {
-        "host": os.getenv("MYSQL_HOST", "localhost"),
         "user": os.getenv("MYSQL_USER", "root"),
         "password": os.getenv("MYSQL_PASSWORD", ""),
-        "database": os.getenv("MYSQL_DATABASE", "aligned"),
+        "database": os.getenv("MYSQL_DATABASE", "align"),
     }
-    port = os.getenv("MYSQL_PORT")
-    if port is not None:
-        cfg["port"] = int(port)
+    # Cloud SQL via Unix socket (Cloud Run)
+    if host.startswith("/cloudsql/"):
+        cfg["unix_socket"] = host
+    else:
+        cfg["host"] = host
+        port = os.getenv("MYSQL_PORT")
+        if port is not None:
+            cfg["port"] = int(port)
     return cfg
 
 

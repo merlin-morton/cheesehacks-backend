@@ -1,4 +1,4 @@
-# Aligned backend – build and run
+# Align backend – build and run
 # Use: make [target]. On Windows use Git Bash or: powershell -File build.ps1 [target]
 
 PYTHON   ?= python
@@ -30,4 +30,4 @@ run:
 
 mysql:
 	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; \
-	$(MYSQL) -h "$${MYSQL_HOST:-localhost}" -u "$${MYSQL_USER:-root}" -p"$${MYSQL_PASSWORD:-}" "$${MYSQL_DATABASE:-aligned}"
+	$(MYSQL) -h "$${MYSQL_HOST:-localhost}" -u "$${MYSQL_USER:-root}" -p"$${MYSQL_PASSWORD:-}" "$${MYSQL_DATABASE:-align}"

@@ -1,0 +1,10 @@
+.env
+.env_example
+.git
+.gitignore
+__pycache__
+*.pyc
+.venv
+venv
+*.md
+.dockerignore

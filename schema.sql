@@ -1,5 +1,9 @@
--- Aligned Database Schema
+-- Align Database Schema
 -- Run this to create the database and tables.
+
+CREATE DATABASE IF NOT EXISTS align;
+USE align;
+
 -- If you had personality_vector on users before: INSERT INTO characteristics (user_id, trait_key, value_blob, is_public)
 --   SELECT id, 'personality_vector', personality_vector, FALSE FROM users WHERE personality_vector IS NOT NULL;
 -- then drop the column from users.

@@ -302,7 +302,7 @@ async def update_characteristics(
 
 
 # Main
-app = FastAPI(title="Aligned", description="Quiz, profile, and diagnostics API.")
+app = FastAPI(title="Align", description="Quiz, profile, and diagnostics API.")
 app.include_router(quiz_router)
 app.include_router(diagnostics_router)
 app.include_router(profile_router)
