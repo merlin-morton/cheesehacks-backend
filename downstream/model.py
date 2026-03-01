@@ -20,6 +20,11 @@ class CoolProjectionHead(nn.Module):
                  checkpoint_path: str = None):
         super().__init__()
         encoder = SharedEncoderBinaryHeads(input_dim=in_features, latent_dim=in_features, tasks=['dummy'])
+        # freeze encoder
+        for param in encoder.parameters():
+            param.requires_grad = False
+
+        # mlp
         self.mlp = nn.Sequential(
             nn.Linear(in_features, out_classes * 2),
             nn.GELU(),
