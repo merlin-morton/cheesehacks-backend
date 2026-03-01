@@ -2,7 +2,9 @@
 Interface to a separate MLP (personality model). Stubs for now.
 - Format question/response into text for the model.
 - Update personality vector from one or many question/response strings.
+- Call MLP with personality vector to get inferred characteristics (key-value); persist to characteristics table.
 """
+import json
 import struct
 from typing import Any
 
@@ -93,6 +95,17 @@ def _call_mlp(personality_vector: list[float], response_strings: list[str]) -> l
     return list(personality_vector)
 
 
+def _call_mlp_characteristics_callback(personality_vector: list[float]) -> dict[str, Any]:
+    """
+    Stub: different callback — send personality vector to the MLP and get back
+    inferred characteristics as key-value pairs (e.g. star_sign, myers_briggs).
+    Replace with real HTTP/gRPC call to your ML characteristics endpoint.
+    Returns dict of trait_key -> value (values should be string or JSON-serializable).
+    """
+    # Stub: return example characteristics; replace with actual MLP call
+    return {}
+
+
 def _vector_to_bytes(vec: list[float]) -> bytes:
     """Serialize list of floats to BLOB bytes (double precision)."""
     if not vec:
@@ -123,6 +136,45 @@ def update_personality_from_batch(
     return new_vector
 
 
+def update_characteristics_from_mlp(
+    user_id: str,
+    personality_vector: list[float],
+    is_public: bool = False,
+) -> dict[str, Any]:
+    """
+    Call the MLP characteristics callback with the personality vector; MLP returns
+    key-value characteristics. For each (key, value), update the characteristics
+    table. Skips the key 'personality_vector' so the vector is not overwritten.
+    Returns the dict of traits that were applied.
+    """
+    characteristics = _call_mlp_characteristics_callback(personality_vector)
+    applied = {}
+    for trait_key, value in characteristics.items():
+        if trait_key == "personality_vector":
+            continue
+        if value is None:
+            continue
+        text_val = value if isinstance(value, str) else json.dumps(value)
+        db.set_characteristic(user_id, trait_key, text_val, is_public, value_is_blob=False)
+        applied[trait_key] = value
+    return applied
+
+
+def fetch_and_save_characteristics_from_mlp(
+    user_id: str,
+    is_public: bool = False,
+    *,
+    personality_vector: list[float] | None = None,
+) -> dict[str, Any]:
+    """
+    Load user's personality vector (or use provided one), call MLP characteristics
+    callback, then persist every returned key-value into the characteristics table.
+    Returns the dict of traits that were applied.
+    """
+    vec = personality_vector if personality_vector is not None else get_user_personality_vector(user_id)
+    return update_characteristics_from_mlp(user_id, vec, is_public=is_public)
+
+
 def update_personality_from_response(
     user_id: str,
     personality_vector: list[float],
@@ -147,11 +199,8 @@ def update_personality_from_response(
 
 
 def get_user_personality_vector(user_id: str) -> list[float]:
-    """Load user's personality vector from DB as list of floats. Returns [] if none."""
-    user = db.get_user(user_id)
-    if not user:
-        return []
-    raw = user.get("personality_vector")
+    """Load user's personality vector from characteristics table as list of floats. Returns [] if none."""
+    raw = db.get_personality_vector(user_id)
     return _bytes_to_vector(raw)
 
 

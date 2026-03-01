@@ -1,4 +1,4 @@
-# Cheesehacks backend – build and run (PowerShell)
+# Aligned backend – build and run (PowerShell)
 # Usage: .\build.ps1 [install | db-setup | run | mysql]
 
 param(
@@ -87,7 +87,7 @@ function Invoke-Mysql {
     $host_ = if ($env:MYSQL_HOST) { $env:MYSQL_HOST } else { "localhost" }
     $user = if ($env:MYSQL_USER) { $env:MYSQL_USER } else { "root" }
     $pass = if ($env:MYSQL_PASSWORD) { $env:MYSQL_PASSWORD } else { "" }
-    $db   = if ($env:MYSQL_DATABASE) { $env:MYSQL_DATABASE } else { "cheesehacks" }
+    $db   = if ($env:MYSQL_DATABASE) { $env:MYSQL_DATABASE } else { "aligned" }
     $args = @("-h", $host_, "-u", $user, $db)
     if ($pass) { $args = @("-h", $host_, "-u", $user, "-p$pass", $db) }
     & $mysqlExe @args

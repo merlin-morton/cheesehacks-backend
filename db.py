@@ -1,5 +1,5 @@
 """
-MySQL database connection and query helpers for Cheesehacks backend.
+MySQL database connection and query helpers for Aligned backend.
 Uses environment variables: MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE
 """
 import os
@@ -20,7 +20,7 @@ def get_connection_config() -> dict:
         "host": os.getenv("MYSQL_HOST", "localhost"),
         "user": os.getenv("MYSQL_USER", "root"),
         "password": os.getenv("MYSQL_PASSWORD", ""),
-        "database": os.getenv("MYSQL_DATABASE", "cheesehacks"),
+        "database": os.getenv("MYSQL_DATABASE", "aligned"),
     }
     port = os.getenv("MYSQL_PORT")
     if port is not None:
@@ -52,11 +52,11 @@ def _ensure_user_id(provider_sub: str, provider: str = "google") -> str:
 # --- User operations ---
 
 def get_user(user_id: str) -> Optional[dict]:
-    """Fetch user by id. Returns None if not found."""
+    """Fetch user by id. Returns None if not found. (Characteristics are in get_characteristics.)"""
     with get_connection() as conn:
         cur = conn.cursor(dictionary=True)
         cur.execute(
-            "SELECT id, provider, provider_sub, email, personality_vector, birthday, age, "
+            "SELECT id, provider, provider_sub, email, birthday, age, "
             "user_settings, is_hidden, privacy_settings, created_at, updated_at FROM users WHERE id = %s",
             (user_id,),
         )
@@ -70,7 +70,7 @@ def get_user(user_id: str) -> Optional[dict]:
 def get_user_public(user_id: str) -> Optional[dict]:
     """
     Fetch user profile for public lookup. Respects privacy_settings and is_hidden.
-    Returns None if user not found or is hidden.
+    Returns None if user not found or is hidden. Public characteristics included when showPersonality.
     """
     user = get_user(user_id)
     if not user or user.get("is_hidden"):
@@ -84,7 +84,7 @@ def get_user_public(user_id: str) -> Optional[dict]:
     if priv.get("showBirthday"):
         out["birthday"] = str(user["birthday"]) if user.get("birthday") else None
     if priv.get("showPersonality"):
-        out["personality_vector"] = user.get("personality_vector")
+        out["characteristics"] = get_characteristics(user_id, public_only=True)
     return out
 
 
@@ -165,14 +165,134 @@ def update_user_profile(user_id: str, birthday: Optional[str] = None, age: Optio
     return affected > 0
 
 
-def update_personality_vector(user_id: str, vector_bytes: bytes) -> bool:
-    """Store personality vector (BLOB)."""
+# --- Characteristics (personality vector + other traits, each with is_public) ---
+
+# Trait keys for personality/philosophical characteristics (use these or any string)
+CHARACTERISTIC_KEYS = (
+    "personality_vector", "star_sign", "myers_briggs", "attachment_style", "enneagram_type",
+    "love_language", "moral_foundation", "political_leaning", "humor_style", "conflict_style",
+    "learning_style", "big_five", "optimism_level", "introvert_extrovert", "chronotype",
+    "decision_style", "creativity_style", "spirituality", "life_philosophy", "mindset",
+    "core_values", "top_strengths", "communication_style", "stress_response", "motivation_style",
+    "risk_tolerance", "perfectionism_level", "empathy_style", "leadership_style", "learning_orientation",
+    "time_orientation", "self_monitoring", "need_for_closure", "cognitive_style", "emotional_expressiveness",
+    "assertiveness", "emotional_intelligence", "curiosity_level",
+)
+
+
+def get_characteristics(user_id: str, public_only: bool = False) -> dict:
+    """
+    Get all characteristics for a user. Returns dict: trait_key -> value.
+    For personality_vector value is bytes (vector of floats); for others, str.
+    If public_only=True, only returns traits where is_public=TRUE.
+    """
+    with get_connection() as conn:
+        cur = conn.cursor(dictionary=True)
+        if public_only:
+            cur.execute(
+                "SELECT trait_key, value_text, value_blob FROM characteristics WHERE user_id = %s AND is_public = TRUE",
+                (user_id,),
+            )
+        else:
+            cur.execute(
+                "SELECT trait_key, value_text, value_blob FROM characteristics WHERE user_id = %s",
+                (user_id,),
+            )
+        rows = cur.fetchall()
+        cur.close()
+    out = {}
+    for r in rows:
+        k = r["trait_key"]
+        if r["value_blob"] is not None:
+            out[k] = r["value_blob"]
+        elif r["value_text"] is not None:
+            out[k] = r["value_text"]
+    return out
+
+
+def get_characteristics_with_visibility(user_id: str) -> list[dict]:
+    """
+    Get all characteristics with is_public flag for API. Each item: { trait_key, value, is_public }.
+    personality_vector value is returned as bytes; caller can convert to list[float] for JSON.
+    """
+    with get_connection() as conn:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            "SELECT trait_key, value_text, value_blob, is_public FROM characteristics WHERE user_id = %s",
+            (user_id,),
+        )
+        rows = cur.fetchall()
+        cur.close()
+    out = []
+    for r in rows:
+        if r["value_blob"] is not None:
+            val = r["value_blob"]
+        elif r["value_text"] is not None:
+            val = r["value_text"]
+        else:
+            continue
+        out.append({"trait_key": r["trait_key"], "value": val, "is_public": bool(r["is_public"])})
+    return out
+
+
+def set_characteristic(
+    user_id: str,
+    trait_key: str,
+    value: Any,
+    is_public: bool = False,
+    *,
+    value_is_blob: bool = False,
+) -> bool:
+    """
+    Set one characteristic. value_is_blob=True for personality_vector (bytes); else value stored as text.
+    """
     with get_connection() as conn:
         cur = conn.cursor()
-        cur.execute("UPDATE users SET personality_vector = %s WHERE id = %s", (vector_bytes, user_id))
+        if value_is_blob:
+            cur.execute(
+                """
+                INSERT INTO characteristics (user_id, trait_key, value_blob, is_public)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE value_blob = VALUES(value_blob), value_text = NULL, is_public = VALUES(is_public)
+                """,
+                (user_id, trait_key, value, is_public),
+            )
+        else:
+            text_val = value if isinstance(value, str) else json.dumps(value) if value is not None else None
+            cur.execute(
+                """
+                INSERT INTO characteristics (user_id, trait_key, value_text, is_public)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE value_text = VALUES(value_text), value_blob = NULL, is_public = VALUES(is_public)
+                """,
+                (user_id, trait_key, text_val, is_public),
+            )
+        cur.close()
+    return True
+
+
+def set_characteristic_visibility(user_id: str, trait_key: str, is_public: bool) -> bool:
+    """Update only the is_public flag for a trait."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE characteristics SET is_public = %s WHERE user_id = %s AND trait_key = %s",
+            (is_public, user_id, trait_key),
+        )
         affected = cur.rowcount
         cur.close()
     return affected > 0
+
+
+def get_personality_vector(user_id: str) -> Optional[bytes]:
+    """Get personality vector BLOB for user from characteristics table. None if not set."""
+    chars = get_characteristics(user_id, public_only=False)
+    return chars.get("personality_vector")
+
+
+def update_personality_vector(user_id: str, vector_bytes: bytes, is_public: bool = False) -> bool:
+    """Store personality vector in characteristics table (trait_key=personality_vector)."""
+    return set_characteristic(user_id, "personality_vector", vector_bytes, is_public, value_is_blob=True)
 
 
 def _row_to_user(row: dict) -> dict:

@@ -1,4 +1,4 @@
-# Cheesehacks 2026 Backend
+# Aligned Backend
 
 FastAPI backend with MySQL: quiz, profile, and diagnostics APIs.
 
@@ -97,7 +97,18 @@ For multi-select, `selected_ids` can be an array. For free text, e.g. `{ "text":
 }
 ```
 
-Stores the vector as a BLOB on the user profile.
+Stores the vector in the **characteristics** table (`personality_vector` trait).
+
+---
+
+### Characteristics
+
+The **personality vector** is still a **vector of floats** (stored as BLOB). All other traits (star sign, Myers-Briggs, attachment style, etc.) are text and **all are populatable** via the API.
+
+- **GET `/profile/getCharacteristics`** (auth) — Returns your characteristics: each `{ trait_key, value, is_public }`. `personality_vector` value is `list[float]`; others are strings.
+- **POST `/profile/updateCharacteristics`** (auth) — Set/update traits. Body: `{ "traits": [ { "trait_key": "star_sign", "value": "Leo", "is_public": true }, { "trait_key": "personality_vector", "value": [0.1, -0.2], "is_public": false } ] }`. Use `value` as **list of floats** only for `personality_vector`; for all others use a string.
+
+When `showPersonality` is true, **GET `/profile/getProfile`** returns a `characteristics` object with only **public** traits. Trait keys include: `personality_vector`, `star_sign`, `myers_briggs`, `attachment_style`, `enneagram_type`, `love_language`, `moral_foundation`, `political_leaning`, `humor_style`, `conflict_style`, `learning_style`, `big_five`, `chronotype`, `spirituality`, `life_philosophy`, `core_values`, `communication_style`, and more (see `db.CHARACTERISTIC_KEYS`).
 
 ---
 
@@ -112,6 +123,8 @@ Stores the vector as a BLOB on the user profile.
 | POST | `/profile/updateSettings` | Yes | Update user settings |
 | POST | `/profile/updatePrivacy` | Yes | Update privacy (is_hidden, privacy_settings) |
 | GET | `/profile/getProfile` | No | Public profile by `user_id` (respects privacy) |
+| GET | `/profile/getCharacteristics` | Yes | Your characteristics (vector + traits, each with is_public) |
+| POST | `/profile/updateCharacteristics` | Yes | Set/update traits (personality_vector = list[float]; others = string) |
 | POST | `/profile/addFriend` | Yes | Add a friend |
 
 **POST `/profile/register`** (body)

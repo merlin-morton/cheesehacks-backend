@@ -74,6 +74,17 @@ class RegisterBody(BaseModel):
     email: str
 
 
+class TraitUpdate(BaseModel):
+    """One characteristic to set. value: string for text traits, list[float] only for personality_vector."""
+    trait_key: str
+    value: Any  # str for most traits; list[float] for personality_vector
+    is_public: bool = False
+
+
+class UpdateCharacteristicsBody(BaseModel):
+    traits: list[TraitUpdate]
+
+
 # --- Stub quiz questions (replace with DB later) ---
 # question_type: 0=single select, 1=multi-select, 2=scale, 3=free text, 4=ranking, 5=yes/no, 6=other
 STUB_QUESTIONS: list[dict] = [
@@ -250,8 +261,43 @@ async def add_friend(
     return {"message": msg}
 
 
+@profile_router.get("/getCharacteristics")
+async def get_characteristics(user_id: str = Depends(get_current_user_id)):
+    """Get current user's characteristics (personality vector as list of floats; other traits as text). Each has is_public."""
+    import struct
+    rows = db.get_characteristics_with_visibility(user_id)
+    out = []
+    for r in rows:
+        val = r["value"]
+        if r["trait_key"] == "personality_vector" and isinstance(val, bytes):
+            n = len(val) // 8
+            val = list(struct.unpack(f"{n}d", val[: n * 8]))
+        elif isinstance(val, bytes):
+            val = val.decode("utf-8", errors="replace")
+        out.append({"trait_key": r["trait_key"], "value": val, "is_public": r["is_public"]})
+    return {"characteristics": out}
+
+
+@profile_router.post("/updateCharacteristics")
+async def update_characteristics(
+    body: UpdateCharacteristicsBody,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Set or update characteristics. personality_vector: pass value as list[float]; all others as string. Each trait has is_public."""
+    import struct
+    if not db.get_user(user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+    for t in body.traits:
+        if t.trait_key == "personality_vector" and isinstance(t.value, list):
+            vector_bytes = struct.pack(f"{len(t.value)}d", *t.value)
+            db.set_characteristic(user_id, t.trait_key, vector_bytes, t.is_public, value_is_blob=True)
+        else:
+            db.set_characteristic(user_id, t.trait_key, t.value, t.is_public, value_is_blob=False)
+    return {"message": "Characteristics updated", "count": len(body.traits)}
+
+
 # Main
-app = FastAPI()
+app = FastAPI(title="Aligned", description="Quiz, profile, and diagnostics API.")
 app.include_router(quiz_router)
 app.include_router(diagnostics_router)
 app.include_router(profile_router)
