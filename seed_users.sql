@@ -93,3 +93,24 @@ INSERT INTO characteristics (user_id, trait_key, value_text, is_public, manually
 ('900015google', 'love_language', 'Quality time', TRUE, TRUE),
 ('900015google', 'decision_style', 'Analytical', TRUE, TRUE)
 ON DUPLICATE KEY UPDATE value_text = VALUES(value_text), is_public = VALUES(is_public), manually_overridden = VALUES(manually_overridden);
+
+-- ---------------------------------------------------------------------------
+-- Example: adding one person's everything (user + friends + characteristics)
+-- ---------------------------------------------------------------------------
+-- 1) One user
+INSERT INTO users (id, provider, provider_sub, email, is_hidden, user_settings, privacy_settings) VALUES
+('900099google', 'google', '900099', 'single.user@example.com', FALSE, '{}', '{"showEmail":false,"showAge":false,"showBirthday":false,"showPersonality":true}')
+ON DUPLICATE KEY UPDATE email = VALUES(email), updated_at = CURRENT_TIMESTAMP;
+
+-- 2) Friends (bidirectional: make them friends with 900001 and 900002)
+INSERT IGNORE INTO friends (user_id, friend_id) VALUES
+('900099google', '900001google'), ('900001google', '900099google'),
+('900099google', '900002google'), ('900002google', '900099google');
+
+-- 3) Characteristics for that person
+INSERT INTO characteristics (user_id, trait_key, value_text, is_public, manually_overridden) VALUES
+('900099google', 'star_sign', 'Libra', TRUE, TRUE),
+('900099google', 'myers_briggs', 'INFP', TRUE, TRUE),
+('900099google', 'love_language', 'Acts of service', TRUE, TRUE),
+('900099google', 'moral_foundation', 'Care and fairness', TRUE, TRUE)
+ON DUPLICATE KEY UPDATE value_text = VALUES(value_text), is_public = VALUES(is_public), manually_overridden = VALUES(manually_overridden);

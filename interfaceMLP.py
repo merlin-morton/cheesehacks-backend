@@ -130,7 +130,7 @@ def _call_mlp(personality_vector: list[float], response_strings: list[str]) -> l
         )
 
         # run the MLP model
-        personality_vector = inference_model(emb)
+        personality_vector = inference_model.forward_embedding(emb)
 
     return list(personality_vector)
 
