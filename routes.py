@@ -308,6 +308,15 @@ app.include_router(diagnostics_router)
 app.include_router(profile_router)
 
 
+@app.on_event("startup")
+def startup_ensure_schema():
+    """Create database and tables if missing (e.g. first Cloud Run deploy)."""
+    try:
+        db.ensure_schema()
+    except Exception:
+        pass  # Don't block startup; first request may still get 503 if DB unreachable
+
+
 def _handle_mysql_unavailable(request, exc):
     return JSONResponse(
         status_code=503,

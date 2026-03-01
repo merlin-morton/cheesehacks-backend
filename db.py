@@ -8,6 +8,7 @@ Local: MYSQL_HOST=localhost (default), optional MYSQL_PORT.
 import os
 import json
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, Optional
 
 try:
@@ -48,6 +49,42 @@ def get_connection():
     except Exception:
         conn.rollback()
         raise
+    finally:
+        conn.close()
+
+
+def ensure_schema() -> None:
+    """
+    Create database and tables if they don't exist (e.g. on first Cloud Run deploy).
+    Idempotent: safe to call on every startup. Reads schema.sql next to this file.
+    """
+    if mysql is None:
+        return
+    cfg = get_connection_config()
+    # Connect without database first so we can run CREATE DATABASE
+    cfg_no_db = {k: v for k, v in cfg.items() if k != "database"}
+    schema_path = Path(__file__).resolve().parent / "schema.sql"
+    if not schema_path.exists():
+        return
+    sql = schema_path.read_text(encoding="utf-8", errors="replace")
+    statements = [
+        s.strip() for s in sql.split(";")
+        if s.strip() and not s.strip().startswith("--")
+    ]
+    conn = mysql.connector.connect(**cfg_no_db)
+    try:
+        cur = conn.cursor()
+        for stmt in statements:
+            if not stmt:
+                continue
+            try:
+                cur.execute(stmt)
+            except MySQLError as e:
+                # Ignore "already exists" / duplicate; re-raise others
+                if e.errno not in (1007, 1050):  # DB exists, table exists
+                    raise
+        conn.commit()
+        cur.close()
     finally:
         conn.close()
 
