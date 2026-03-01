@@ -62,5 +62,5 @@ class CoolProjectionHead(nn.Module):
         :returns: task logits [B, out_classes]
         """
         # we suppose x are preencoded into the embeddings
-        features = self.encoder(x)
+        features = self.encoder.embedding_forward(x)
         return self.mlp(features)

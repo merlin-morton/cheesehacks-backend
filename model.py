@@ -4,6 +4,7 @@ import torch.nn as nn
 class SharedEncoderBinaryHeads(nn.Module):
     def __init__(self, input_dim: int, latent_dim: int, tasks: list[str]=("commonsense", "deontology", "justice", "utilitarianism", "virtue"), dropout: float = 0.1):
         super().__init__()
+        self.tasks = tasks
 
         if isinstance(tasks, tuple):
             tasks = list(tasks)

@@ -28,10 +28,30 @@ class MoralFoundation(Dataset):
             show_progress_bar=True,
             batch_size=256
         )
-        self.labels = torch.tensor(labels, dtype=torch.long)
+        # map string labels to integers
+        raw_annotations = [str(a) if a is not None else "Non-Moral" for a in
+                           self.data['annotation']]
 
-        self.unique_labels = sorted(set(labels))
+        all_labels = []
+        for a in raw_annotations:
+            # split by comma if multi-label, strip whitespace
+            parts = [p.strip() for p in a.split(',')]
+            all_labels.extend(parts)
+
+        self.unique_labels = sorted(list(set(all_labels)))
         self.num_classes = len(self.unique_labels)
+        self.label_to_idx = {label: i for i, label in
+                             enumerate(self.unique_labels)}
+        self.idx_to_label = {i: label for label, i in
+                             self.label_to_idx.items()}
+
+        print(f"\n# USC-MOLA-Lab/MFRC MAPPING:\n{self.idx_to_label}")
+
+        indices = [self.label_to_idx[
+                       str(a).split(',')[0].strip()] if a is not None else
+                   self.label_to_idx["Non-Moral"] for a in
+                   self.data['annotation']]
+        self.labels = torch.tensor(indices, dtype=torch.long)
 
     def __len__(self) -> int:
         return len(self.labels)
